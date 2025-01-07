@@ -3,6 +3,7 @@ import WebSocket from 'ws';
 import dotenv from 'dotenv';
 import fastifyFormBody from '@fastify/formbody';
 import fastifyWs from '@fastify/websocket';
+import { storeCallData, updateCallData, SESSION_CONFIG, MediaBufferManager } from './services/callManager.js';
 
 // Load environment variables from .env file
 dotenv.config();
@@ -21,7 +22,7 @@ fastify.register(fastifyFormBody);
 fastify.register(fastifyWs);
 
 // Constants
-const SYSTEM_MESSAGE = 'You are a helpful and bubbly AI assistant who loves to chat about anything the user is interested about and is prepared to offer them facts. You have a penchant for dad jokes, owl jokes, and rickrolling – subtly. Always stay positive, but work in a joke when appropriate.';
+const SYSTEM_MESSAGE = 'Assist emergency callers with professionalism, empathy, and efficiency. The AI must be able to quickly understand the situation, reassure the caller, and collect crucial information. Initial Behavior: Tone: Calm, reassuring, and respectful. Adaptability: Ability to detect the callers language and adapt to it in real-time. Identification: Clear identification as a police service. Detailed Dialogue Flow: Initial Greeting and Language Detection AI Prompt (Initial): "Hello, police, how can I help you?" (Defaults to English, but the AI will adjust the language based on the response). Response Analysis: The AI uses the OpenAI API to detect the language from the callers first words. Language Adaptation: The AI adjusts its language to the detected language for the remainder of the call. Questioning the Emergency AI Prompt (after language adjustment): "Im a police officer, what is your emergency? Tell me whats happening." Collecting Key Information and Reassurance AI Prompt (after the caller begins to explain): "I understand. Can you tell me exactly where you are? And what led you to call? Take your time and explain the situation. Were here to help you." If the caller is struggling: "Take a deep breath and take your time. If you need help, were here to support you." Assessing the Ability to Speak AI Prompt: "Are you able to speak to me clearly? If youre having trouble, try to answer with a yes or no." Collecting Additional Information (If Possible) Prompts (adapted to the situation): "Are there any injuries?" "Are you in immediate danger?" "Can you give me more details about whats happening?" If the location is unclear: "Can you give me more information about your location? For example, are there any landmarks or recognizable street names nearby?" Maintaining Contact AI Prompt: "Stay on the line with me, the police are on their way. Im still here to help you." Using Emotion Analysis If the AI detects a high level of fear or confusion, use phrases such as: "I see youre worried, try to stay calm, were going to take care of you." "Its normal to be e to call us. Important: Rigorous Testing: It is essential to test the system with simulated emergency scenarios to ensure its effectiveness.   ';
 const VOICE = 'alloy';
 const PORT = process.env.PORT || 5050; // Allow dynamic port assignment
 
@@ -67,11 +68,22 @@ fastify.register(async (fastify) => {
         console.log('Client connected');
 
         // Connection-specific state
+        let currentCallId = null;
         let streamSid = null;
         let latestMediaTimestamp = 0;
         let lastAssistantItem = null;
         let markQueue = [];
         let responseStartTimestampTwilio = null;
+        let sessionInitialized = false;
+        const mediaBufferManager = new MediaBufferManager();
+
+        // Initialize call in Firebase
+        storeCallData({
+            status: 'connected',
+            startTime: new Date().toISOString()
+        }).then(id => {
+            currentCallId = id;
+        });
 
         const openAiWs = new WebSocket('wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01', {
             headers: {
@@ -99,7 +111,7 @@ fastify.register(async (fastify) => {
             openAiWs.send(JSON.stringify(sessionUpdate));
 
             // Uncomment the following line to have AI speak first:
-            // sendInitialConversationItem();
+             sendInitialConversationItem();
         };
 
         // Send initial conversation item if AI talks first
@@ -112,7 +124,7 @@ fastify.register(async (fastify) => {
                     content: [
                         {
                             type: 'input_text',
-                            text: 'Greet the user with "Hello there! I am an AI voice assistant powered by Twilio and the OpenAI Realtime API. You can ask me for facts, jokes, or anything you can imagine. How can I help you?"'
+                            text: '911, whats your emergency?"'
                         }
                     ]
                 }
@@ -178,6 +190,14 @@ fastify.register(async (fastify) => {
 
                 if (LOG_EVENT_TYPES.includes(response.type)) {
                     console.log(`Received event: ${response.type}`, response);
+                }
+
+                // Store transcriptions and responses in Firebase
+                if (response.type === 'speech.final' || response.type === 'text') {
+                    updateCallData(currentCallId, {
+                        lastMessage: response.text,
+                        messageType: response.type
+                    });
                 }
 
                 if (response.type === 'response.audio.delta' && response.delta) {
@@ -248,8 +268,14 @@ fastify.register(async (fastify) => {
             }
         });
 
-        // Handle connection close
+        // Handle client disconnection
         connection.on('close', () => {
+            if (currentCallId) {
+                updateCallData(currentCallId, {
+                    status: 'completed',
+                    endTime: new Date().toISOString()
+                });
+            }
             if (openAiWs.readyState === WebSocket.OPEN) openAiWs.close();
             console.log('Client disconnected.');
         });
