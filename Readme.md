@@ -168,12 +168,12 @@ We've developed a comprehensive web-based platform that:
 ### Installation
 1. Clone the repository
 ```bash
-git clone https://github.com/yourusername/emergency-call-system.git
+git clone https://github.com/ayoub0030/dashboardVoice.git
 ```
 
 2. Install dependencies
 ```bash
-cd emergency-call-system
+cd speech-assistant-openai-realtime-api-node
 npm install
 ```
 
