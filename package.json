@@ -3,19 +3,31 @@
   "version": "1.0.1",
   "description": "",
   "main": "index.js",
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "setup-test-data": "node scripts/setupTestData.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "module",
   "dependencies": {
     "@fastify/formbody": "^8.0.0",
     "@fastify/websocket": "^11.0.0",
     "dotenv": "^16.4.5",
     "fastify": "^5.0.0",
-    "ws": "^8.18.0",
-    "firebase": "^11.1.0"
+    "firebase": "^11.1.0",
+    "form-data": "^4.0.1",
+    "node-fetch": "^3.3.2",
+    "nodemon": "^3.0.2",
+    "openai": "^4.24.1",
+    "wav": "^1.0.2",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "node-record-lpcm16": "^1.0.1",
+    "node-sox": "^1.0.0"
   }
 }

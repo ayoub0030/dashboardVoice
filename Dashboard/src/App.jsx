@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Box, CssBaseline, Grid, Container } from '@mui/material';
+import { Box, Grid, CssBaseline } from '@mui/material';
 import LeftPanel from './components/LeftPanel/LeftPanel';
 import Map from './components/Map/Map';
+import ConversationPanel from './components/ConversationPanel/ConversationPanel';
+import { getEmergencyCalls } from './firebase/emergencyService';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { db } from './firebase/config';
 import './App.css';
@@ -14,17 +16,24 @@ function App() {
 
   useEffect(() => {
     try {
+      console.log('Setting up emergency calls listener...');
       // Subscribe to real-time emergency call updates
       const q = query(
-        collection(db, 'emergencyCalls'),
-        orderBy('timestamp', 'desc')
+        collection(db, 'emergencyCalls')
+        // Removing orderBy for now as it might be causing issues
       );
 
       const unsubscribe = onSnapshot(q, (snapshot) => {
-        const callsData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
+        console.log('Received snapshot update');
+        const callsData = snapshot.docs.map(doc => {
+          const data = doc.data();
+          console.log('Call data:', { id: doc.id, ...data });
+          return {
+            id: doc.id,
+            ...data
+          };
+        });
+        console.log('Total calls:', callsData.length);
         setCalls(callsData);
         setLoading(false);
       }, (err) => {
@@ -69,7 +78,7 @@ function App() {
         <Grid 
           item 
           xs={12} 
-          md={4} 
+          md={3} 
           sx={{ 
             height: '100%',
             p: '0 !important',
@@ -79,12 +88,15 @@ function App() {
           <LeftPanel 
             calls={calls}
             onCallSelect={handleCallSelect}
+            selectedCall={selectedCall}
+            loading={loading}
+            error={error}
           />
         </Grid>
         <Grid 
           item 
           xs={12} 
-          md={8} 
+          md={selectedCall ? 6 : 9}
           sx={{ 
             height: '100%',
             p: '0 !important'
@@ -95,6 +107,7 @@ function App() {
             width: '100%'
           }}>
             <Map 
+              calls={calls}
               selectedCall={selectedCall}
               center={selectedCall?.coordinates ? {
                 lat: selectedCall.coordinates.latitude,
@@ -106,6 +119,21 @@ function App() {
               zoom={selectedCall ? 12 : 6}
             />
           </Box>
+        </Grid>
+        <Grid 
+          item 
+          xs={12} 
+          md={3} 
+          sx={{ 
+            height: '100%',
+            p: '0 !important',
+            display: selectedCall ? 'block' : 'none'
+          }}
+        >
+          <ConversationPanel 
+            selectedCall={selectedCall}
+            isVisible={!!selectedCall}
+          />
         </Grid>
       </Grid>
     </Box>

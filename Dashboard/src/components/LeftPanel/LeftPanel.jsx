@@ -1,194 +1,241 @@
 import React, { useState } from 'react';
-import {
-  Box,
-  Typography,
-  TextField,
-  List,
-  ListItem,
-  ListItemText,
-  Chip,
-  Paper,
-  IconButton,
-} from '@mui/material';
-import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import { Box, Typography, InputBase, Paper, Chip, CircularProgress } from '@mui/material';
 import LocalHospitalIcon from '@mui/icons-material/LocalHospital';
 import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
-import WarningIcon from '@mui/icons-material/Warning';
+import PhoneInTalkIcon from '@mui/icons-material/PhoneInTalk';
+import { emergencyScenarios } from '../../utils/emergencyScenarios';
+import { simulateEmergencyCall } from '../../utils/simulateCall';
 import './LeftPanel.css';
 
-const LeftPanel = ({ calls = [], onCallSelect }) => {
-  const [searchTerm, setSearchTerm] = useState('');
-
-  const getCallIcon = (callType) => {
-    switch (callType?.toLowerCase()) {
+const LeftPanel = ({ calls, onCallSelect, selectedCall, loading, error }) => {
+  const getIcon = (type, status) => {
+    if (status === 'in_progress') {
+      return <PhoneInTalkIcon sx={{ color: '#1976d2' }} />;
+    }
+    switch (type?.toLowerCase()) {
       case 'medical':
-        return <LocalHospitalIcon color="error" />;
+        return <LocalHospitalIcon sx={{ color: '#d32f2f' }} />;
       case 'fire':
-        return <LocalFireDepartmentIcon color="error" />;
+        return <LocalFireDepartmentIcon sx={{ color: '#d32f2f' }} />;
       default:
-        return <WarningIcon color="warning" />;
+        return <LocalHospitalIcon sx={{ color: '#d32f2f' }} />;
     }
   };
 
-  const getPriorityColor = (priority) => {
-    switch (priority?.toLowerCase()) {
-      case 'critical':
-        return 'error';
-      case 'high':
-        return 'warning';
-      default:
-        return 'default';
-    }
-  };
+  // Calculate statistics
+  const totalCalls = calls.length;
+  const criticalCalls = calls.filter(call => call.priority?.toLowerCase() === 'high').length;
+  const resolvedCalls = calls.filter(call => call.status === 'completed').length;
 
-  const filteredCalls = calls.filter(call =>
-    call.location?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    call.callType?.toLowerCase().includes(searchTerm.toLowerCase())
-  ).sort((a, b) => {
+  // Sort calls by timestamp (newest first) if available, otherwise by startTime
+  const sortedCalls = [...calls].sort((a, b) => {
     const timeA = a.timestamp?.toDate?.() || new Date(a.startTime);
     const timeB = b.timestamp?.toDate?.() || new Date(b.startTime);
     return timeB - timeA;
   });
 
-  const activeCalls = filteredCalls.filter(call => call.status === 'active');
-  const completedCalls = filteredCalls.filter(call => call.status === 'completed');
+  const [medicalIndex, setMedicalIndex] = useState(0);
+  const [fireIndex, setFireIndex] = useState(0);
+  const [policeIndex, setPoliceIndex] = useState(0);
+
+  if (loading) {
+    return (
+      <Box sx={{ 
+        height: '100%', 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center' 
+      }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Box sx={{ 
+        height: '100%', 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        p: 2,
+        color: 'error.main'
+      }}>
+        <Typography>Error: {error}</Typography>
+      </Box>
+    );
+  }
 
   return (
-    <Paper className="left-panel" elevation={3} sx={{ 
-      height: '100vh',
-      overflow: 'hidden',
-      display: 'flex',
-      flexDirection: 'column',
-      m: 0,
-      borderRadius: 0
-    }}>
-      <Box sx={{ p: 2, borderBottom: '1px solid rgba(0,0,0,0.12)' }}>
-        <Typography variant="h6" className="panel-title">
-          Emergency Calls
-        </Typography>
-        
-        <TextField
-          fullWidth
-          variant="outlined"
-          placeholder="Search calls..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          size="small"
-          className="search-field"
-          sx={{ mb: 2 }}
-        />
+    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <Box sx={{ p: 2, borderBottom: '1px solid rgba(0, 0, 0, 0.12)' }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>Emergency Calls</Typography>
+        <Paper
+          component="form"
+          sx={{
+            p: '2px 4px',
+            display: 'flex',
+            alignItems: 'center',
+            width: '100%',
+            mb: 2
+          }}
+        >
+          <InputBase
+            sx={{ ml: 1, flex: 1 }}
+            placeholder="Search calls..."
+          />
+        </Paper>
 
-        <Box className="emergency-stats" sx={{ mb: 2 }}>
-          <Box className="stat-item">
-            <Typography variant="h4">{calls.length}</Typography>
-            <Typography variant="body2">Total</Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+          <Box sx={{ textAlign: 'center' }}>
+            <Typography variant="h4">{totalCalls}</Typography>
+            <Typography variant="body2" color="text.secondary">Total</Typography>
           </Box>
-          <Box className="stat-item">
-            <Typography variant="h4" color="error">
-              {calls.filter(call => call.priority?.toLowerCase() === 'critical').length}
-            </Typography>
-            <Typography variant="body2">Critical</Typography>
+          <Box sx={{ textAlign: 'center' }}>
+            <Typography variant="h4" color="error.main">{criticalCalls}</Typography>
+            <Typography variant="body2" color="text.secondary">Critical</Typography>
           </Box>
-          <Box className="stat-item">
-            <Typography variant="h4" color="success">
-              {completedCalls.length}
-            </Typography>
-            <Typography variant="body2">Resolved</Typography>
+          <Box sx={{ textAlign: 'center' }}>
+            <Typography variant="h4" color="success.main">{resolvedCalls}</Typography>
+            <Typography variant="body2" color="text.secondary">Resolved</Typography>
           </Box>
         </Box>
       </Box>
 
-      <Box sx={{ 
-        flex: 1, 
-        overflow: 'auto',
-        px: 2,
-        py: 1
-      }}>
-        <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
-          Active Calls ({activeCalls.length})
-        </Typography>
-        <List className="emergency-list" disablePadding>
-          {activeCalls.map((call) => (
-            <ListItem
+      <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
+        {sortedCalls.length === 0 ? (
+          <Typography sx={{ textAlign: 'center', color: 'text.secondary', mt: 2 }}>
+            No emergency calls
+          </Typography>
+        ) : (
+          sortedCalls.map((call) => (
+            <Paper
               key={call.id}
-              button
-              onClick={() => onCallSelect?.(call)}
+              elevation={selectedCall?.id === call.id ? 3 : 1}
               sx={{
-                mb: 1,
-                borderRadius: 1,
-                border: '1px solid rgba(0,0,0,0.12)',
+                p: 2,
+                mb: 2,
+                cursor: 'pointer',
+                bgcolor: selectedCall?.id === call.id ? 'action.selected' : 'background.paper',
                 '&:hover': {
-                  backgroundColor: 'rgba(0,0,0,0.04)',
-                },
-              }}
-            >
-              <IconButton size="small" sx={{ mr: 1 }}>
-                {getCallIcon(call.callType)}
-              </IconButton>
-              <ListItemText
-                primary={call.location || 'Unknown Location'}
-                secondary={
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-                    <Chip
-                      label={call.callType || 'Emergency'}
-                      size="small"
-                      variant="outlined"
-                    />
-                    {call.priority && (
-                      <Chip
-                        label={call.priority}
-                        size="small"
-                        color={getPriorityColor(call.priority)}
-                        variant="outlined"
-                      />
-                    )}
-                  </Box>
+                  bgcolor: 'action.hover'
                 }
-              />
-            </ListItem>
-          ))}
-        </List>
-
-        {completedCalls.length > 0 && (
-          <>
-            <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1, mt: 2 }}>
-              Completed Calls ({completedCalls.length})
-            </Typography>
-            <List className="emergency-list" disablePadding>
-              {completedCalls.map((call) => (
-                <ListItem
-                  key={call.id}
-                  button
-                  onClick={() => onCallSelect?.(call)}
-                  sx={{
-                    mb: 1,
-                    borderRadius: 1,
-                    border: '1px solid rgba(0,0,0,0.12)',
-                    opacity: 0.7,
-                  }}
-                >
-                  <IconButton size="small" sx={{ mr: 1 }}>
-                    {getCallIcon(call.callType)}
-                  </IconButton>
-                  <ListItemText
-                    primary={call.location || 'Unknown Location'}
-                    secondary={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-                        <Chip
-                          label={call.callType || 'Emergency'}
-                          size="small"
-                          variant="outlined"
-                        />
-                      </Box>
-                    }
+              }}
+              onClick={() => onCallSelect(call)}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                {getIcon(call.callType, call.status)}
+                <Box sx={{ ml: 1 }}>
+                  <Typography variant="subtitle1">{call.location}</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Started: {call.startTime ? new Date(call.startTime).toLocaleString() : 'Invalid Date'}
+                  </Typography>
+                </Box>
+              </Box>
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <Chip
+                  label={call.status || 'active'}
+                  color={call.status === 'completed' ? 'success' : 'primary'}
+                  size="small"
+                />
+                {call.priority && (
+                  <Chip
+                    label={call.priority}
+                    color={call.priority.toLowerCase() === 'high' ? 'error' : 'default'}
+                    size="small"
                   />
-                </ListItem>
-              ))}
-            </List>
-          </>
+                )}
+              </Box>
+            </Paper>
+          ))
         )}
       </Box>
-    </Paper>
+
+      {/* Emergency Scenario Buttons */}
+      <Box sx={{ 
+        p: 2, 
+        borderTop: '1px solid rgba(0, 0, 0, 0.12)',
+        display: 'flex',
+        gap: 2,
+        justifyContent: 'center'
+      }}>
+        <Paper
+          elevation={2}
+          sx={{
+            p: 1,
+            cursor: 'pointer',
+            bgcolor: '#4CAF50',
+            color: 'white',
+            flex: 1,
+            textAlign: 'center',
+            '&:hover': { bgcolor: '#388E3C' }
+          }}
+          onClick={async () => {
+            try {
+              const scenario = emergencyScenarios.medical[medicalIndex];
+              const callId = await simulateEmergencyCall(scenario);
+              const newCall = calls.find(call => call.id === callId);
+              if (newCall) onCallSelect(newCall);
+              setMedicalIndex((medicalIndex + 1) % emergencyScenarios.medical.length);
+            } catch (error) {
+              console.error('Error simulating medical emergency:', error);
+            }
+          }}
+        >
+          <Typography variant="body2">Medical Emergency </Typography>
+        </Paper>
+        <Paper
+          elevation={2}
+          sx={{
+            p: 1,
+            cursor: 'pointer',
+            bgcolor: '#F44336',
+            color: 'white',
+            flex: 1,
+            textAlign: 'center',
+            '&:hover': { bgcolor: '#D32F2F' }
+          }}
+          onClick={async () => {
+            try {
+              const scenario = emergencyScenarios.fire[fireIndex];
+              const callId = await simulateEmergencyCall(scenario);
+              const newCall = calls.find(call => call.id === callId);
+              if (newCall) onCallSelect(newCall);
+              setFireIndex((fireIndex + 1) % emergencyScenarios.fire.length);
+            } catch (error) {
+              console.error('Error simulating fire emergency:', error);
+            }
+          }}
+        >
+          <Typography variant="body2">Fire Emergency </Typography>
+        </Paper>
+        <Paper
+          elevation={2}
+          sx={{
+            p: 1,
+            cursor: 'pointer',
+            bgcolor: '#2196F3',
+            color: 'white',
+            flex: 1,
+            textAlign: 'center',
+            '&:hover': { bgcolor: '#1976D2' }
+          }}
+          onClick={async () => {
+            try {
+              const scenario = emergencyScenarios.police[policeIndex];
+              const callId = await simulateEmergencyCall(scenario);
+              const newCall = calls.find(call => call.id === callId);
+              if (newCall) onCallSelect(newCall);
+              setPoliceIndex((policeIndex + 1) % emergencyScenarios.police.length);
+            } catch (error) {
+              console.error('Error simulating police emergency:', error);
+            }
+          }}
+        >
+          <Typography variant="body2">Police Emergency  </Typography>
+        </Paper>
+      </Box>
+    </Box>
   );
 };
 

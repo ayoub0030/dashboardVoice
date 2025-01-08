@@ -1,5 +1,22 @@
 import { db } from '../firebase-config.js';
-import { collection, addDoc, updateDoc, serverTimestamp, doc } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, serverTimestamp, doc, arrayUnion } from 'firebase/firestore';
+
+// Function to add a new emergency call
+export async function addEmergencyCall(callData) {
+    try {
+        const callRef = await addDoc(collection(db, 'emergencyCalls'), {
+            ...callData,
+            timestamp: serverTimestamp(),
+            lastUpdated: serverTimestamp(),
+            transcript: []
+        });
+        console.log('Created new emergency call:', callRef.id);
+        return callRef.id;
+    } catch (error) {
+        console.error('Error adding emergency call:', error);
+        return null;
+    }
+}
 
 // Function to store call data
 export async function storeCallData(callData) {
@@ -8,8 +25,10 @@ export async function storeCallData(callData) {
             ...callData,
             timestamp: serverTimestamp(),
             startTime: serverTimestamp(),
-            status: 'active'
+            status: 'active',
+            transcript: []
         });
+        console.log('Stored call data:', callRef.id);
         return callRef.id;
     } catch (error) {
         console.error('Error storing call data:', error);
@@ -20,13 +39,28 @@ export async function storeCallData(callData) {
 // Function to update call data
 export async function updateCallData(callId, updates) {
     try {
+        console.log('Updating call data for ID:', callId, 'Updates:', updates);
         const callRef = doc(db, 'emergencyCalls', callId);
-        await updateDoc(callRef, {
+        const updateData = {
             ...updates,
             lastUpdated: serverTimestamp()
-        });
+        };
+
+        // If there's a transcript update, use arrayUnion to add it to the array
+        if (updates.transcript) {
+            console.log('Adding transcript:', updates.transcript);
+            await updateDoc(callRef, {
+                ...updateData,
+                transcript: arrayUnion(updates.transcript)
+            });
+        } else {
+            await updateDoc(callRef, updateData);
+        }
+        
+        console.log('Successfully updated call data');
     } catch (error) {
         console.error('Error updating call data:', error);
+        throw error;
     }
 }
 
@@ -34,10 +68,10 @@ export async function updateCallData(callId, updates) {
 export const SESSION_CONFIG = {
     turn_detection: {
         type: 'server_vad',
-        threshold: 0.05,  // Very sensitive
-        prefix_padding_ms: 1500,  // Much more padding
-        silence_duration_ms: 3000,  // Much longer silence duration
-        create_response: true
+        mode: 'fast',
+        vad_threshold: 3,
+        speech_activity_timeout: 1000,
+        speech_fragments_timeout: 300
     },
     input_audio_format: 'g711_ulaw',
     output_audio_format: 'g711_ulaw',
@@ -46,7 +80,7 @@ export const SESSION_CONFIG = {
     temperature: 0.8
 };
 
-// Media buffer management
+// Media buffer manager class
 export class MediaBufferManager {
     constructor() {
         this.mediaBuffer = [];
@@ -74,6 +108,9 @@ export class MediaBufferManager {
 
     setProcessTimeout(callback, timeout = 5000) {
         this.clearTimeout();
-        this.mediaBufferTimeout = setTimeout(callback, timeout);
+        this.mediaBufferTimeout = setTimeout(() => {
+            callback(this.getBuffer());
+            this.clearBuffer();
+        }, timeout);
     }
 }
